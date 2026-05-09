@@ -1,10 +1,9 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Base64 Decoder - Flask Edition</title>
+    <title>Base64 Decoder</title>
     <style>
         * {
             margin: 0;
@@ -199,16 +198,6 @@
             font-size: 0.8rem;
         }
 
-        .warning-msg {
-            background: #3b2e1e;
-            border-left: 4px solid #d29922;
-            color: #ffdf9e;
-            padding: 0.6rem 1rem;
-            border-radius: 0.6rem;
-            margin-top: 0.8rem;
-            font-size: 0.8rem;
-        }
-
         .footer {
             background: #05070a;
             text-align: center;
@@ -216,27 +205,6 @@
             font-size: 0.7rem;
             color: #6e7681;
             border-top: 1px solid #21262d;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 0.6s linear infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .btn-loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-            pointer-events: none;
         }
     </style>
 </head>
@@ -267,7 +235,7 @@
         </div>
     </div>
     <div class="footer">
-        Ctrl + Enter to decode • Powered by Flask
+        Ctrl + Enter to decode
     </div>
 </div>
 
@@ -279,14 +247,11 @@
     const decodedPre = document.getElementById('decodedOutput');
     const messageDiv = document.getElementById('messageArea');
 
-    function showMessage(msg, type = 'success') {
+    function showMessage(msg, isError = false) {
         messageDiv.innerHTML = '';
         const msgBox = document.createElement('div');
-        if (type === 'error') {
+        if (isError) {
             msgBox.className = 'error-msg';
-            msgBox.innerText = msg;
-        } else if (type === 'warning') {
-            msgBox.className = 'warning-msg';
             msgBox.innerText = msg;
         } else {
             msgBox.className = 'success-msg';
@@ -300,58 +265,35 @@
                     if (messageDiv.firstChild === msgBox) messageDiv.innerHTML = '';
                 }, 200);
             }
-        }, 4000);
+        }, 3500);
     }
 
-    async function performBase64Decode() {
+    function performBase64Decode() {
         let base64String = inputTextarea.value;
         
         if (base64String.trim() === '') {
-            showMessage('Empty input! Provide a valid Base64 string.', 'error');
+            showMessage('Empty input! Provide a valid Base64 string.', true);
             decodedPre.innerText = '';
             return;
         }
 
-        // Show loading state
-        const originalText = decodeButton.innerText;
-        decodeButton.innerHTML = '<span class="spinner"></span> DECODING...';
-        decodeButton.disabled = true;
-        decodeButton.classList.add('btn-loading');
-
         try {
-            const response = await fetch('/decode', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ base64: base64String.trim() }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Decoding failed');
+            const binaryDecoded = atob(base64String.trim());
+            const byteArray = new Uint8Array(binaryDecoded.length);
+            for (let i = 0; i < binaryDecoded.length; i++) {
+                byteArray[i] = binaryDecoded.charCodeAt(i);
             }
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            decodedPre.innerText = data.decoded;
-            if (data.warning) {
-                showMessage(`${data.warning} (${data.length || data.decoded.length} characters)`, 'warning');
-            } else {
-                showMessage(`Decoded successfully! (${data.length || data.decoded.length} characters)`);
-            }
+            const utf8String = new TextDecoder('utf-8').decode(byteArray);
+            
+            decodedPre.innerText = utf8String;
+            showMessage(`Decoded successfully! (${utf8String.length} characters)`);
         } catch (error) {
-            console.error('Decode error:', error);
+            let errorDetail = error.message || 'Invalid base64 string';
+            if (errorDetail.includes('Invalid character') || errorDetail.includes('atob')) {
+                errorDetail = 'Invalid Base64 format. Please check your string.';
+            }
             decodedPre.innerText = '';
-            showMessage(`Decoding failed: ${error.message}`, 'error');
-        } finally {
-            // Restore button state
-            decodeButton.innerHTML = originalText;
-            decodeButton.disabled = false;
-            decodeButton.classList.remove('btn-loading');
+            showMessage(`Exception: ${errorDetail}`, true);
         }
     }
     
@@ -365,14 +307,14 @@
     async function copyDecodedText() {
         let textToCopy = decodedPre.innerText;
         if (!textToCopy || textToCopy.trim() === '') {
-            showMessage('No valid decoded text to copy! Decode something first.', 'error');
+            showMessage('No valid decoded text to copy! Decode something first.', true);
             return;
         }
         try {
             await navigator.clipboard.writeText(textToCopy);
             showMessage('Copied to clipboard!');
         } catch (err) {
-            showMessage('Failed to copy. Your browser may not support clipboard access.', 'error');
+            showMessage('Failed to copy.', true);
         }
     }
     
